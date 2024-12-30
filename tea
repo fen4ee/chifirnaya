@@ -1,0 +1,78 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+import time
+
+# Словарь для отслеживания состояния пользователей
+user_data = {}
+
+# Обработчик команды /start
+def start(update: Update, context: CallbackContext) -> None:
+    user_id = update.effective_user.id
+    # Инициализация данных для пользователя
+    user_data[user_id] = {"pour_number": 1, "timer": 30}
+    
+    # Отправка сообщения с кнопкой
+    send_next_pour_message(update, context, user_id)
+
+# Функция отправки сообщения с кнопкой
+def send_next_pour_message(update, context, user_id):
+    keyboard = [[InlineKeyboardButton("👌 Начать пролив", callback_data="start_pour")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if "callback_query" in update.to_dict():
+        update.callback_query.message.reply_text(
+            "✅ Готовы к следующему проливу?",
+            reply_markup=reply_markup
+        )
+    else:
+        context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Готовы к следующему проливу?",
+            reply_markup=reply_markup
+        )
+
+# Обработчик кнопки
+def button(update: Update, context: CallbackContext) -> None:
+    query = update.callback_query
+    query.answer()  # Подтверждение для Telegram
+    
+    user_id = query.from_user.id
+    if user_id not in user_data:
+        return
+    
+    # Получаем данные пользователя
+    pour_number = user_data[user_id]["pour_number"]
+    timer = user_data[user_id]["timer"]
+    
+    # Уведомление о запуске таймера
+    query.edit_message_text(
+        text=f"🫖 Пролив: {pour_number} | ⏳ Таймер: {timer} сек. Ждём..."
+    )
+    
+    # Запуск таймера
+    time.sleep(timer)
+    
+    # Увеличиваем таймер и номер пролива
+    user_data[user_id]["pour_number"] += 1
+    user_data[user_id]["timer"] += 15
+    
+    # Отправляем сообщение с новой кнопкой
+    send_next_pour_message(update, context, user_id)
+
+# Основная функция
+def main():
+    TOKEN = "ВАШ_ТОКЕН_ОТ_BOTFATHER"  # Замените на ваш токен
+
+    updater = Updater(TOKEN)
+    dispatcher = updater.dispatcher
+
+    # Обработчики команд и кнопок
+    dispatcher.add_handler(CommandHandler("start", start))
+    dispatcher.add_handler(CallbackQueryHandler(button, pattern="start_pour"))
+
+    # Запуск бота
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
